@@ -1,104 +1,138 @@
 {
-  "jan_candidates_before_limit": 2,
-  "input_unmatched_jans": 2,
-  "resolved": [],
-  "unresolved": [],
-  "skipped_already_covered": [],
+  "jan_candidates_before_limit": 5,
+  "input_unmatched_jans": 5,
+  "resolved": [
+    {
+      "jan": "4582518957510",
+      "asin": "B0HSMSVVJB",
+      "rank": 12,
+      "title": "ホットウィール(Hot Wheels) パントーン アソート - レトロレース ミニカー 1:64スケール 10台 BOX販売 3歳から JKY47-986C"
+    },
+    {
+      "jan": "4582518957503",
+      "asin": "B0HSMMJRXG",
+      "rank": 7,
+      "title": "ホットウィール(Hot Wheels) テーマオートモーティブ アソート J-インポート ミニカー 1:64スケール 10台 BOX販売 3歳から GDG44-988A"
+    }
+  ],
+  "unresolved": [
+    {
+      "jan": "4523251112668",
+      "rank": 20,
+      "title": "【予約】【1月下旬発売予定】はむにぎりフレンズ マスコット ブンチョウ／シマエナガ／ひよこ／アヒル／オカメインコ／インコ 文鳥 はむにぎり ぬいぐるみ 小鳥 トリ とり 鳥 ぬい撮り かわいい 持ち運び グッズ【メール便可】"
+    },
+    {
+      "jan": "4542202429891",
+      "rank": 16,
+      "title": "MUGYUUUS むぎゅーず サンリオキャラクターズ - ハローキティ / ポチャッコ / ポムポムプリン / マイメロディ / クロミ / シナモロール -　【ドリームズ公式】"
+    }
+  ],
+  "skipped_already_covered": [
+    {
+      "jan": "4573118575181",
+      "asin": "B08P8BYTXK",
+      "rank": null
+    }
+  ],
   "skipped_non_b0": [],
   "new_asins": [
-    "B0HNSBZL91",
-    "B0HG8PP5MM"
+    "B0HSMSVVJB",
+    "B0HSMMJRXG"
   ],
   "title_fuzzy": {
-    "title_fuzzy_candidates_before_limit": 14,
-    "title_fuzzy_input": 14,
-    "title_fuzzy_resolved": [
-      {
-        "rank": 21,
-        "title": "【楽天1位連続受賞】 ストライダー14x 14インチ 安心2年保証 キックバイク キッズバイク ブレーキ付き ペダル後付け 子供用 自転車 3歳 4歳 5歳 6歳 7歳 誕生日 クリスマス プレゼント 男の子 女の子 長く使える 入園 幼稚園",
-        "item_code": "mamegyorai:10046612",
-        "asin": "B0HNSBZL91",
-        "match_method": "title_fuzzy",
-        "candidate_title": "ストライダー 14x (STRIDER 14x) 2026年 クリスマスセット 14インチ 車体 スティールブルー(ペダルキットなし) 日本正規品",
-        "brand_match": true,
-        "rakuten_brand": "ストライダー",
-        "candidate_brand": "ストライダー",
-        "model_token_match": false,
-        "common_tokens": [],
-        "spec_match": true,
-        "price_ok": true,
-        "rakuten_price": 29700.0,
-        "candidate_price": 29700.0,
-        "image_sim": null,
-        "vision_gate_mode": "shadow",
-        "vision_gate_passed": true
-      }
-    ],
+    "title_fuzzy_candidates_before_limit": 12,
+    "title_fuzzy_input": 12,
+    "title_fuzzy_resolved": [],
     "title_fuzzy_rejected": [
       {
         "rank": 30,
-        "title": "タカラトミー ブルーイ エスカレーターでGO! ブルーイのショッピングモール ブル-イエスカレ-タ-GOシヨツピングモ-ル [ブル-イエスカレ-タ-GOシヨツピングモ-ル]",
+        "title": "江ノ電電車カラー　江ノ電バス　日野ポンチョ",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0HG8PP5MM",
-            "candidate_title": "タカラトミー(TAKARA TOMY) ブルーイ エスカレーターでGO! ブルーイのショッピングモール",
-            "candidate_price": 6689.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 28,
-        "title": "タカラトミー ぷにるんず サンリオキャラクターズ プニルンズサンリオキヤラクタ-ズ [プニルンズサンリオキヤラクタ-ズ]",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0FFGJ8P3Q",
-            "candidate_title": "タカラトミー(TAKARA TOMY) ぷにるんず サンリオキャラクターズ 【日本おもちゃ大賞2025 デジタル部門 優秀賞】",
-            "candidate_price": 6435.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0F9XWRYTB",
-            "candidate_title": "タカラトミー(TAKARA TOMY) ぷにるんず ぷにすたる クリアピンク",
-            "candidate_price": 5285.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0H8DWY3GC",
-            "candidate_title": "タカラトミー(TAKARA TOMY) ぷにるんず サンリオキャラクターズ 【日本おもちゃ大賞2025 デジタル部門 優秀賞】 (× 4)",
-            "candidate_price": 25740.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          }
-        ]
-      },
-      {
-        "rank": 25,
-        "title": "【店内全品25%,2点30%OFF】マグネット ブロック マインクラフト 磁石 100-1000pcsセット ランダム発送 2cmサイズ 通常版/強力版/超強力の3種類から選べる マイクラ風ミニフィグ8-107体付 プレゼント袋付 収納ボックス付 光るブロック付 キューブ おもちゃ",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0GK674SWZ",
-            "candidate_title": "zmart 500個と人形20体 マグネット式 ブロック レンガ ミニワールド STEM 組み立て DIY 知育玩具 マインクラフト 風 ブロック おもちゃ 500ピース 組み立て 知育 玩具 子供 キッズ 玩具 建築 セット",
-            "candidate_price": 13013.0,
+            "asin": "B0HSJRMZ4V",
+            "candidate_title": "タカラトミーアーツ トミカ 江ノ電バス 江ノ電 電車カラーVer. 日野ポンチョ | オリジナルトミカ",
+            "candidate_price": 2606.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
           },
+          {
+            "asin": "B0G3VYSGLR",
+            "candidate_title": "タカラトミーアーツ トミカ 江ノ電バス5 日野ポンチョ オリジナルトミカ 行き先シール付き",
+            "candidate_price": 1808.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B08DF86R5Y",
+            "candidate_title": "布ごよみ 江ノ電 てぬぐいタオル 長タオル フェイスタオル",
+            "candidate_price": 1089.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 26,
+        "title": "【在庫切れの子予約/納期要確認】あひる ひつじ 羊 犬のぬいぐるみ 洗える 子供 赤ちゃん ぬいぐるみ ファーストトイ 男の子 女の子 おもちゃ 犬 いぬ ソフトトイ 赤ちゃん ベビーギフト 出産祝い プレゼント 誕生日 羊 猿 くま",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B09PF2VCWQ",
+            "candidate_title": "MIHI ぬいぐるみ 【正規品 PSC基準適合・食品衛生法適合】 動物 アニマル ふわふわ もこもこ おもちゃ ファーストトイ 贈り物 ギフト 出産祝い ニューボンフォト こどもの日 バレンタイン ホワイトデー 母の日 約38㎝ いぬ イヌ 犬 DOG",
+            "candidate_price": 1980.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B09PF1RSZZ",
+            "candidate_title": "MIHI ぬいぐるみ 【正規品 PSC基準適合・食品衛生法適合】 動物 アニマル ふわふわ もこもこ おもちゃ ファーストトイ 贈り物 ギフト 出産祝い ニューボンフォト こどもの日 バレンタイン ホワイトデー 母の日 約38㎝ くま クマ 熊 bear",
+            "candidate_price": 1980.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0D7HVN8JM",
+            "candidate_title": "MIHI ぬいぐるみ 【正規品 PSC基準適合・食品衛生法適合】 動物 アニマル ふわふわ もこもこ おもちゃ ファーストトイ 贈り物 ギフト 出産祝い ニューボンフォト こどもの日 バレンタイン ホワイトデー 母の日 約34㎝ (ひつじ)",
+            "candidate_price": 2115.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 25,
+        "title": "【2027年5月発売】マスターグレード MG 量産型ゲルググ Ver.2.0【予約商品・メーカー減数の可能性あり】",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B002IT67XK",
+            "candidate_title": "1/60 MS-14 量産型ゲルググ (機動戦士ガンダム)",
+            "candidate_price": 0.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          }
+        ]
+      },
+      {
+        "rank": 18,
+        "title": "【抽選で最大100%P】【全品23%,2点28%OFF】マグネット ブロック マインクラフト 磁石 100-1000pcsセット ランダム発送 2cmサイズ 通常版/強力版/超強力の3種類から選べる ミニフィグ8-107体付 プレゼント袋付 収納ボックス付 光るブロック付 キューブ おもちゃ",
+        "reason": "no_guardrail_pass",
+        "candidates": [
           {
             "asin": "B0FP2631NV",
             "candidate_title": "マグネットブロック マイクラ風 磁石ブロックセット 2cm RGB発光付き 知育玩具 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント (100PCS 農場テーマ)",
@@ -109,155 +143,158 @@
             "price_ok": true
           },
           {
-            "asin": "B0HPBCRTSM",
-            "candidate_title": "Vexolite マグネットブロック マイクラ風 磁石ブロック 積み木 マグネット 立体パズル 2.3cm 鉱脈 | 知育玩具 マグネットパズル 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント",
-            "candidate_price": 2899.0,
+            "asin": "B0FR4FGRP4",
+            "candidate_title": "Vexolite マグネットブロック マイクラ風 48個 補充用 2cm 磁石ブロック 積み木 立体ズル 知育玩具 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント 水",
+            "candidate_price": 2399.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
+          },
+          {
+            "asin": "B0HP9XBB29",
+            "candidate_title": "Vexolite マグネットブロック マイクラ風 磁石ブロック 積み木 マグネット 立体パズル 2.3cm 個人の小屋 | 知育玩具 マグネットパズル 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント",
+            "candidate_price": 3599.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
           }
         ]
       },
       {
-        "rank": 22,
-        "title": "ミニピク 専用 キッズカメラカバー シリコン素材 安全機能付きストラップ付属 キッズカメラ トイカメラ",
+        "rank": 17,
+        "title": "Mellojoy メロジョイ 公式 ミニランド mini land スクイーズ 正規品",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0G58957JN",
-            "candidate_title": "キッズカメラカバー MiNiPiC専用 ミニピク トイカメラ 子供用カメラ (パステルブラック)",
-            "candidate_price": 1990.0,
+            "asin": "B0HQWCCQ4Y",
+            "candidate_title": "Mello joy メロ ジョイ ミニランド 【公式替え袋付き・未開封品・正規品】スクイーズ ブラインドボックス 1箱 ランダム メロジョイミニランド | 中身は選べません",
+            "candidate_price": 7980.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0G589PX4V",
-            "candidate_title": "キッズカメラカバー MiNiPiC専用 ミニピク トイカメラ 子供用カメラ (パステルピンク)",
-            "candidate_price": 1990.0,
+            "asin": "B0HN2V3VYH",
+            "candidate_title": "メロジョイ　スクイーズ　『特濃牛乳アイスクリーム 』ふわふわ やわらか触感 ASMR　もちもち　プレゼント　クリスマス　正月　ギフト [並行輸入品]",
+            "candidate_price": 7898.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
           },
           {
-            "asin": "B0G58CNDLB",
-            "candidate_title": "キッズカメラカバー MiNiPiC専用 ミニピク トイカメラ 子供用カメラ (パステルミント)",
-            "candidate_price": 1990.0,
+            "asin": "B0GV42VH7Z",
+            "candidate_title": "【2026新登场】めろジョイ スクイーズ メロジョイ スクイーズ 新感触！水感もちもち ストレス解消 グッズ 癒し 握る玩具 耐久性TPR 洗える 伸縮自在 子供 大人 兼用 プレゼント柔らかいTPR素材 ゆっくり元に戻ります ストレス解消に 高弾性ラテックス おもちゃ かわいい粘着性 大人子供用 男女兼用 多场景适用",
+            "candidate_price": 577.0,
             "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
-        "rank": 19,
-        "title": "たまごっちパラダイス マイラボたまごっち(1セット)【バンダイ(たまごっち)】",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B0HHM71WPC",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - My Lab Tamagotchi 対象年齢 6 才以上 たまごっち",
-            "candidate_price": 8900.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0HNVC7X53",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - Neon Planets 対象年齢 6 才以上 | たまごっちパラダイス",
-            "candidate_price": 5900.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0H1KQ5CMD",
-            "candidate_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - White Glacier 対象年齢 6 才以上 | 2026Amazon トイオブザイヤー ベーシックトイ部門 1位 たまごっちパラダイス",
-            "candidate_price": 5156.0,
-            "brand_match": true,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
           }
         ]
-      },
-      {
-        "rank": 16,
-        "title": "バンダイ おでかけしよ♪お世話して、かわいがって?おしゃべりポチタン オシヤベリポチタン [オシヤベリポチタン]",
-        "reason": "no_guardrail_pass",
-        "candidates": []
       },
       {
         "rank": 15,
-        "title": "高評価★4.7【累計48万台突破】光るホイール MOVEGU_公式 キックスクーター 【4段階高さ調整】 キックボード 子供用 三輪車 軽量 頑丈 方向変換 安定 折りたたみ 持ち運び便利 後輪ブレーキ 誕生日 【お試し返品可能】",
+        "title": "ポケモンカードゲーム 30th CELEBRATION BOX MEGA 拡張パック 新品未開封 シュリンク付き",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0H9RLM2KJ",
-            "candidate_title": "「KAYUSO」キックスクーター 子供用 キックボード アウトドアに適用 おもちゃ ギフト 誕生日 (ブルー) | 4段階高さ調整 | 光るLEDタイヤ | 折り畳み式 | 方向変換 | 耐荷重75kg",
-            "candidate_price": 4482.0,
+            "asin": "B0GXCRBL5J",
+            "candidate_title": "ポケモンカードゲーム MEGA 拡張パック 30th CELEBRATION BOX",
+            "candidate_price": 7216.0,
+            "brand_match": false,
+            "model_token_match": true,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0GP928YDZ",
+            "candidate_title": "ポケモンカードゲーム MEGA 拡張パック ストームエメラルダ BOX",
+            "candidate_price": 9200.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": false
           },
           {
-            "asin": "B0H9RPR6VF",
-            "candidate_title": "「KAYUSO」キックスクーター 子供用 キックボード アウトドアに適用 おもちゃ ギフト 誕生日 (ピンク) | 4段階高さ調整 | 光るLEDタイヤ | 折り畳み式 | 方向変換 | 耐荷重75kg",
-            "candidate_price": 4482.0,
+            "asin": "B0HRJNRRJ9",
+            "candidate_title": "【シュリンク付き未開封品】 MEGA 拡張パック 30th CELEBRATION BOX 国内正規品 | シュリンク付き未開封品, 国内正規品",
+            "candidate_price": 26800.0,
             "brand_match": false,
-            "model_token_match": false,
+            "model_token_match": true,
             "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0H9RJHTLT",
-            "candidate_title": "「KAYUSO」キックスクーター 子供用 キックボード アウトドアに適用 おもちゃ ギフト 誕生日 (ブラック) | 4段階高さ調整 | 光るLEDタイヤ | 折り畳み式 | 方向変換 | 耐荷重75kg",
-            "candidate_price": 4482.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
+            "price_ok": true
           }
         ]
       },
       {
-        "rank": 12,
-        "title": "【年間ランキング入賞】【クーポン利用で1個22%、2個27%OFF】磁石ブロック マインクラフト風 レゴ互換 マイクラ風 マグネットキューブ マイクラ風 知育玩具 誕生日プレゼント クリスマス 入園ギフト 卒業プレゼント マグネット 磁石 ブロック おもちゃ クリスマスプレゼント",
+        "rank": 14,
+        "title": "【楽天1位★あんしん保証】【グッド・トイ受賞】 KitWell 公式ストア キットウェル 正規品 マグビルド ベーシックセット マグネットブロック 70ピース 知育おもちゃ 知育玩具 誕生日 男の子 女の子 プレゼント 3歳 4歳 5歳 6歳 クリスマス",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
-            "asin": "B0FP26MR3C",
-            "candidate_title": "YOIKO マグネットブロック 180PCS テレポートテーマ マイクラ風 磁石ブロックセット | 2cm 発光ブロック15個付き 知育玩具 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント",
-            "candidate_price": 5132.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0DMNXMQTB",
-            "candidate_title": "Vexolite マグネットブロック マイクラ風 磁石ブロック 積み木 マグネット 立体パズル 知育玩具 マグネットパズル 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント 212PCS 農場",
-            "candidate_price": 5839.0,
-            "brand_match": false,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": false
-          },
-          {
-            "asin": "B0FNQS49VY",
-            "candidate_title": "YOIKO マグネットブロック マイクラ風 48個セット拡張ブロック 積み木 立体パズル | 知育玩具 小学生 幼児 おもちゃ 男の子 女の子 誕生日 クリスマス 入園 卒園 プレゼント",
-            "candidate_price": 2299.0,
-            "brand_match": false,
+            "asin": "B076ZDQB15",
+            "candidate_title": "グッド・トイ 受賞 キットウェル マグビルド スロープセット 72ピース 知育玩具 マグネット ブロック おもちゃ 玉の道",
+            "candidate_price": 7649.0,
+            "brand_match": true,
             "model_token_match": false,
             "spec_match": false,
             "price_ok": true
+          },
+          {
+            "asin": "B08LPGVDMH",
+            "candidate_title": "グッド・トイ 受賞 キットウェル マグビルド ベーシックセット 70ピース 知育玩具 マグネット ブロック おもちゃ",
+            "candidate_price": 7919.0,
+            "brand_match": true,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          },
+          {
+            "asin": "B0BHP31NKW",
+            "candidate_title": "グッド・トイ 受賞 知育玩具 キットウェル マグビルド カラーズ 130ピース 13色 インテリア マグネットブロック",
+            "candidate_price": 11969.0,
+            "brand_match": true,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 11,
+        "title": "【送料無料】メロジョイ ミニランド ブラインドボックス 未開封 Mellojoy スクイーズ ミニチュア 食品モチーフ もちもち ぷにぷに ストレス解消 おもちゃ ギフト　プレゼント[8807]",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0HQDLB9M8",
+            "candidate_title": "メロｼﾞｮｲ　スクイーズ　職人手作り　触感クリーミークリーム（スフレM）茶色",
+            "candidate_price": 10800.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0HQDVJ25T",
+            "candidate_title": "スクイーズ メロｼﾞｮｲ　職人手作り　触感クリーミークリーム（スフレL）ピンク",
+            "candidate_price": 10800.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0HQDQW88S",
+            "candidate_title": "スクイーズ メロｼﾞｮｲ　職人手作り　触感クリーミークリーム（スフレL）茶色",
+            "candidate_price": 10800.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
           }
         ]
       },
@@ -296,14 +333,48 @@
         ]
       },
       {
-        "rank": 7,
+        "rank": 9,
+        "title": "【年間ランキング入賞】【クーポン利用で1個20%、2個25%OFF】磁石ブロック マインクラフト風 レゴ互換 マイクラ風 マグネットキューブ マイクラ風 知育玩具 誕生日プレゼント クリスマス 入園ギフト 卒業プレゼント マグネット 磁石 ブロック おもちゃ クリスマスプレゼント",
+        "reason": "no_guardrail_pass",
+        "candidates": [
+          {
+            "asin": "B0FP26MR3C",
+            "candidate_title": "YOIKO マグネットブロック 180PCS テレポートテーマ マイクラ風 磁石ブロックセット | 2cm 発光ブロック15個付き 知育玩具 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント",
+            "candidate_price": 5132.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0FPFNWSWQ",
+            "candidate_title": "YOIKO マグネットブロック 188PCS 桜の世界テーマ マイクラ風 磁石ブロックセット 2cm 発光ブロック8個付き 知育玩具 小学生 おもちゃ 誕生日 入園 卒園 ギフト クリスマスプレゼント",
+            "candidate_price": 5132.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": false
+          },
+          {
+            "asin": "B0DTYRNFRT",
+            "candidate_title": "マグネットブロック ランダム120PCS 磁気おもちゃ 立体パズル マグネットパズル DIY 子供 おもちゃ マイクラ風",
+            "candidate_price": 2880.0,
+            "brand_match": false,
+            "model_token_match": false,
+            "spec_match": false,
+            "price_ok": true
+          }
+        ]
+      },
+      {
+        "rank": 2,
         "title": "メロジョイ Mellojoy ミニランド ミニ ブラインドボックス スクイーズ おもちゃ プレゼント ギフト 人気 ストレス発散 即納 正規品 公式 902121",
         "reason": "no_guardrail_pass",
         "candidates": [
           {
             "asin": "B0HQWCCQ4Y",
             "candidate_title": "Mello joy メロ ジョイ ミニランド 【公式替え袋付き・未開封品・正規品】スクイーズ ブラインドボックス 1箱 ランダム メロジョイミニランド | 中身は選べません",
-            "candidate_price": 8280.0,
+            "candidate_price": 7980.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
@@ -330,40 +401,6 @@
         ]
       },
       {
-        "rank": 4,
-        "title": "【26日9:59まで最大20％PB】【楽天1位★あんしん保証】【グッド・トイ受賞】 KitWell 公式ストア キットウェル 正規品 マグビルド ベーシックセット マグネットブロック 70ピース 知育おもちゃ 知育玩具 誕生日 男の子 女の子 プレゼント 3歳 4歳 5歳 6歳 クリスマス",
-        "reason": "no_guardrail_pass",
-        "candidates": [
-          {
-            "asin": "B08LPGVDMH",
-            "candidate_title": "グッド・トイ 受賞 キットウェル マグビルド ベーシックセット 70ピース 知育玩具 マグネット ブロック おもちゃ",
-            "candidate_price": 7919.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B076ZDQB15",
-            "candidate_title": "グッド・トイ 受賞 キットウェル マグビルド スロープセット 72ピース 知育玩具 マグネット ブロック おもちゃ 玉の道",
-            "candidate_price": 7649.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          },
-          {
-            "asin": "B0BHP31NKW",
-            "candidate_title": "グッド・トイ 受賞 知育玩具 キットウェル マグビルド カラーズ 130ピース 13色 インテリア マグネットブロック",
-            "candidate_price": 11969.0,
-            "brand_match": true,
-            "model_token_match": false,
-            "spec_match": false,
-            "price_ok": true
-          }
-        ]
-      },
-      {
         "rank": 1,
         "title": "✦15日限定ポイント5倍UP✦【正規品】メロジョイ Mellojoy 贅沢スフレ ムースクリーム Lサイズ1個 メロジョイ いちごショートケーキ スクイーズスクイーズ おもちゃ ストレス発散 子供 大人 癒しグッズ 人気 プレゼント ギフト 正規品",
         "reason": "no_guardrail_pass",
@@ -371,11 +408,11 @@
           {
             "asin": "B0HQWCCQ4Y",
             "candidate_title": "Mello joy メロ ジョイ ミニランド 【公式替え袋付き・未開封品・正規品】スクイーズ ブラインドボックス 1箱 ランダム メロジョイミニランド | 中身は選べません",
-            "candidate_price": 8280.0,
+            "candidate_price": 7980.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
-            "price_ok": false
+            "price_ok": true
           },
           {
             "asin": "B0HPM8GG1R",
@@ -387,137 +424,62 @@
             "price_ok": true
           },
           {
-            "asin": "B0HN1WFV2Y",
-            "candidate_title": "メロジョイ スクイーズ スフレ いちご [並行輸入品] | スフレ素材, いちごクリーム,",
-            "candidate_price": 11980.0,
+            "asin": "B0HN2V3VYH",
+            "candidate_title": "メロジョイ　スクイーズ　『特濃牛乳アイスクリーム 』ふわふわ やわらか触感 ASMR　もちもち　プレゼント　クリスマス　正月　ギフト [並行輸入品]",
+            "candidate_price": 7898.0,
             "brand_match": false,
             "model_token_match": false,
             "spec_match": false,
-            "price_ok": false
+            "price_ok": true
           }
         ]
       }
     ],
-    "title_fuzzy_page_matches": [
-      {
-        "rank": 23,
-        "title": "アンパンマンことばずかん3000(1個)【セガフェイブ】",
-        "item_code": "netbaby:10055216",
-        "asin": "B0H2LJW3N2",
-        "match_method": "title_fuzzy",
-        "candidate_title": "セガフェイブ (SEGA FAVE) にほんご　えいご　きもちのことば アンパンマンことばずかん3000 | おもちゃ大賞 2026 エデュケーション部門 優秀賞 アンパンマン ことばずかん 3000",
-        "brand_match": true,
-        "rakuten_brand": "セガ フェイブ",
-        "candidate_brand": "セガ フェイブ",
-        "model_token_match": true,
-        "common_tokens": [
-          "3000"
-        ],
-        "spec_match": false,
-        "price_ok": true,
-        "rakuten_price": 7599.0,
-        "candidate_price": 5956.0,
-        "image_sim": null,
-        "vision_gate_mode": "shadow",
-        "vision_gate_passed": true,
-        "reason": "already_covered"
-      },
-      {
-        "rank": 21,
-        "title": "【楽天1位連続受賞】 ストライダー14x 14インチ 安心2年保証 キックバイク キッズバイク ブレーキ付き ペダル後付け 子供用 自転車 3歳 4歳 5歳 6歳 7歳 誕生日 クリスマス プレゼント 男の子 女の子 長く使える 入園 幼稚園",
-        "item_code": "mamegyorai:10046612",
-        "asin": "B0HNSBZL91",
-        "match_method": "title_fuzzy",
-        "candidate_title": "ストライダー 14x (STRIDER 14x) 2026年 クリスマスセット 14インチ 車体 スティールブルー(ペダルキットなし) 日本正規品",
-        "brand_match": true,
-        "rakuten_brand": "ストライダー",
-        "candidate_brand": "ストライダー",
-        "model_token_match": false,
-        "common_tokens": [],
-        "spec_match": true,
-        "price_ok": true,
-        "rakuten_price": 29700.0,
-        "candidate_price": 29700.0,
-        "image_sim": null,
-        "vision_gate_mode": "shadow",
-        "vision_gate_passed": true
-      }
-    ]
+    "title_fuzzy_page_matches": []
   },
   "genre_gate_enabled": true,
-  "genre_gate_dropped": 2,
-  "genre_gate_dropped_items": [
-    {
-      "asin": "B079KCJSD1",
-      "rank": null,
-      "title": "【送料無料】 クツワ 紙ねんど　1kg　PT521",
-      "roots": [
-        "ホビー",
-        "文房具・オフィス用品"
-      ],
-      "match_method": "jan",
-      "jan": "4901478140907"
-    },
-    {
-      "asin": "B01I7QADSW",
-      "rank": null,
-      "title": "銀鳥産業　紙ねんど　1kg　宿題　課題　工作　粘土　ねんど 【N-KN100】",
-      "roots": [
-        "ホビー",
-        "文房具・オフィス用品"
-      ],
-      "match_method": "jan",
-      "jan": "4973107283057"
-    }
-  ],
+  "genre_gate_dropped": 0,
+  "genre_gate_dropped_items": [],
   "yahoo_jan": {
-    "yahoo_jan_candidates_before_limit": 14,
-    "yahoo_jan_input": 14,
-    "yahoo_jan_adopted": 1,
+    "yahoo_jan_candidates_before_limit": 12,
+    "yahoo_jan_input": 12,
+    "yahoo_jan_adopted": 0,
     "yahoo_jan_entries": [
       {
         "rank": 30,
-        "title": "タカラトミー ブルーイ エスカレーターでGO! ブルーイのショッピングモール ブル-イエスカレ-タ-GOシヨツピングモ-ル [ブル-イエスカレ-タ-GOシヨツピングモ-ル]",
-        "query": "タカラトミー ブルーイ エスカレーターでGO ブルーイのショッピングモール",
-        "jan": "4904810097112",
-        "votes": {
-          "4904810097112": 14
-        },
-        "asin": "B0HG8PP5MM",
-        "adopted": true,
-        "reason": "",
-        "item_code": "edion:10922606",
-        "amazon_title": "タカラトミー(TAKARA TOMY) ブルーイ エスカレーターでGO! ブルーイのショッピングモール",
-        "rakuten_brand": "タカラトミー",
-        "amazon_brand": "タカラトミー",
-        "common_codes": [],
-        "identity_ok": true,
-        "identity_reason": ""
+        "title": "江ノ電電車カラー　江ノ電バス　日野ポンチョ",
+        "query": "江ノ電電車カラー 江ノ電バス 日野ポンチョ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
+        "adopted": false,
+        "reason": "no_jan_in_hits"
       },
       {
-        "rank": 28,
-        "title": "タカラトミー ぷにるんず サンリオキャラクターズ プニルンズサンリオキヤラクタ-ズ [プニルンズサンリオキヤラクタ-ズ]",
-        "query": "タカラトミー ぷにるんず サンリオキャラクターズ",
-        "jan": "4904810959199",
-        "votes": {
-          "4904810959199": 18,
-          "4904810072645": 1,
-          "4904810097365": 1
-        },
-        "asin": "B0FFGJ8P3Q",
+        "rank": 26,
+        "title": "【在庫切れの子予約/納期要確認】あひる ひつじ 羊 犬のぬいぐるみ 洗える 子供 赤ちゃん ぬいぐるみ ファーストトイ 男の子 女の子 おもちゃ 犬 いぬ ソフトトイ 赤ちゃん ベビーギフト 出産祝い プレゼント 誕生日 羊 猿 くま",
+        "query": "あひる ひつじ 羊 犬のぬいぐるみ",
+        "jan": "",
+        "votes": {},
+        "asin": "",
         "adopted": false,
-        "reason": "already_covered",
-        "item_code": "edion:10876853",
-        "amazon_title": "タカラトミー(TAKARA TOMY) ぷにるんず サンリオキャラクターズ 【日本おもちゃ大賞2025 デジタル部門 優秀賞】",
-        "rakuten_brand": "タカラトミー",
-        "amazon_brand": "タカラトミー",
-        "common_codes": [],
-        "identity_ok": true,
-        "identity_reason": ""
+        "reason": "no_jan_in_hits"
       },
       {
         "rank": 25,
-        "title": "【店内全品25%,2点30%OFF】マグネット ブロック マインクラフト 磁石 100-1000pcsセット ランダム発送 2cmサイズ 通常版/強力版/超強力の3種類から選べる マイクラ風ミニフィグ8-107体付 プレゼント袋付 収納ボックス付 光るブロック付 キューブ おもちゃ",
+        "title": "【2027年5月発売】マスターグレード MG 量産型ゲルググ Ver.2.0【予約商品・メーカー減数の可能性あり】",
+        "query": "マスターグレード MG 量産型ゲルググ Ver.2.0",
+        "jan": "",
+        "votes": {
+          "4543112566553": 1
+        },
+        "asin": "",
+        "adopted": false,
+        "reason": "too_few_votes"
+      },
+      {
+        "rank": 18,
+        "title": "【抽選で最大100%P】【全品23%,2点28%OFF】マグネット ブロック マインクラフト 磁石 100-1000pcsセット ランダム発送 2cmサイズ 通常版/強力版/超強力の3種類から選べる ミニフィグ8-107体付 プレゼント袋付 収納ボックス付 光るブロック付 キューブ おもちゃ",
         "query": "マグネット ブロック マインクラフト 磁石",
         "jan": "",
         "votes": {},
@@ -526,72 +488,9 @@
         "reason": "no_jan_in_hits"
       },
       {
-        "rank": 23,
-        "title": "アンパンマンことばずかん3000(1個)【セガフェイブ】",
-        "query": "アンパンマンことばずかん3000",
-        "jan": "4979750832444",
-        "votes": {
-          "4979750832444": 15,
-          "4979750806278": 1
-        },
-        "asin": "B0H2LJW3N2",
-        "adopted": false,
-        "reason": "already_covered",
-        "item_code": "netbaby:10055216",
-        "amazon_title": "セガフェイブ (SEGA FAVE) にほんご　えいご　きもちのことば アンパンマンことばずかん3000 | おもちゃ大賞 2026 エデュケーション部門 優秀賞 アンパンマン ことばずかん 3000",
-        "rakuten_brand": "セガ フェイブ",
-        "amazon_brand": "セガ フェイブ",
-        "common_codes": [],
-        "identity_ok": true,
-        "identity_reason": ""
-      },
-      {
-        "rank": 22,
-        "title": "ミニピク 専用 キッズカメラカバー シリコン素材 安全機能付きストラップ付属 キッズカメラ トイカメラ",
-        "query": "ミニピク 専用 キッズカメラカバー",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 21,
-        "title": "【楽天1位連続受賞】 ストライダー14x 14インチ 安心2年保証 キックバイク キッズバイク ブレーキ付き ペダル後付け 子供用 自転車 3歳 4歳 5歳 6歳 7歳 誕生日 クリスマス プレゼント 男の子 女の子 長く使える 入園 幼稚園",
-        "query": "ストライダー 安心2年保証 キックバイク キッズバイク",
-        "jan": "",
-        "votes": {},
-        "asin": "",
-        "adopted": false,
-        "reason": "no_jan_in_hits"
-      },
-      {
-        "rank": 19,
-        "title": "たまごっちパラダイス マイラボたまごっち(1セット)【バンダイ(たまごっち)】",
-        "query": "たまごっちパラダイス マイラボたまごっち",
-        "jan": "4582770018813",
-        "votes": {
-          "4582770018813": 4,
-          "4580872228161": 2,
-          "4580872228062": 2,
-          "4580872228109": 2,
-          "4580872228055": 1
-        },
-        "asin": "B0HHM71WPC",
-        "adopted": false,
-        "reason": "already_covered",
-        "item_code": "netbaby:10055854",
-        "amazon_title": "[バンダイ(BANDAI)] Tamagotchi Paradise - My Lab Tamagotchi 対象年齢 6 才以上 たまごっち",
-        "rakuten_brand": "バンダイ",
-        "amazon_brand": "バンダイ",
-        "common_codes": [],
-        "identity_ok": true,
-        "identity_reason": ""
-      },
-      {
-        "rank": 16,
-        "title": "バンダイ おでかけしよ♪お世話して、かわいがって?おしゃべりポチタン オシヤベリポチタン [オシヤベリポチタン]",
-        "query": "バンダイ おでかけしよ オシヤベリポチタン",
+        "rank": 17,
+        "title": "Mellojoy メロジョイ 公式 ミニランド mini land スクイーズ 正規品",
+        "query": "Mellojoy メロジョイ ミニランド mini",
         "jan": "",
         "votes": {},
         "asin": "",
@@ -600,23 +499,49 @@
       },
       {
         "rank": 15,
-        "title": "高評価★4.7【累計48万台突破】光るホイール MOVEGU_公式 キックスクーター 【4段階高さ調整】 キックボード 子供用 三輪車 軽量 頑丈 方向変換 安定 折りたたみ 持ち運び便利 後輪ブレーキ 誕生日 【お試し返品可能】",
-        "query": "高評価★4.7 光るホイール キックスクーター",
-        "jan": "",
-        "votes": {},
-        "asin": "",
+        "title": "ポケモンカードゲーム 30th CELEBRATION BOX MEGA 拡張パック 新品未開封 シュリンク付き",
+        "query": "ポケモンカードゲーム 30th CELEBRATION BOX",
+        "jan": "4521329462424",
+        "votes": {
+          "4521329462424": 9,
+          "4521329462295": 1,
+          "4904790111259": 1,
+          "4521329463872": 1
+        },
+        "asin": "B0GXCRBL5J",
         "adopted": false,
-        "reason": "no_jan_in_hits"
+        "reason": "no_brand_or_model_match",
+        "item_code": "yum-yum:10002097",
+        "amazon_title": "ポケモンカードゲーム MEGA 拡張パック 30th CELEBRATION BOX",
+        "rakuten_brand": "",
+        "amazon_brand": "",
+        "common_codes": [],
+        "identity_ok": false,
+        "identity_reason": "no_brand_or_model_match"
       },
       {
-        "rank": 12,
-        "title": "【年間ランキング入賞】【クーポン利用で1個22%、2個27%OFF】磁石ブロック マインクラフト風 レゴ互換 マイクラ風 マグネットキューブ マイクラ風 知育玩具 誕生日プレゼント クリスマス 入園ギフト 卒業プレゼント マグネット 磁石 ブロック おもちゃ クリスマスプレゼント",
-        "query": "磁石ブロック マインクラフト風 マグネットキューブ",
+        "rank": 14,
+        "title": "【楽天1位★あんしん保証】【グッド・トイ受賞】 KitWell 公式ストア キットウェル 正規品 マグビルド ベーシックセット マグネットブロック 70ピース 知育おもちゃ 知育玩具 誕生日 男の子 女の子 プレゼント 3歳 4歳 5歳 6歳 クリスマス",
+        "query": "KitWell ストア ベーシックセット",
         "jan": "",
-        "votes": {},
+        "votes": {
+          "4589749480114": 1
+        },
         "asin": "",
         "adopted": false,
-        "reason": "no_jan_in_hits"
+        "reason": "too_few_votes"
+      },
+      {
+        "rank": 11,
+        "title": "【送料無料】メロジョイ ミニランド ブラインドボックス 未開封 Mellojoy スクイーズ ミニチュア 食品モチーフ もちもち ぷにぷに ストレス解消 おもちゃ ギフト　プレゼント[8807]",
+        "query": "メロジョイ ミニランド ブラインドボックス",
+        "jan": "",
+        "votes": {
+          "2200000012593": 2
+        },
+        "asin": "",
+        "adopted": false,
+        "reason": "too_few_votes"
       },
       {
         "rank": 10,
@@ -629,9 +554,9 @@
         "reason": "no_jan_in_hits"
       },
       {
-        "rank": 7,
-        "title": "メロジョイ Mellojoy ミニランド ミニ ブラインドボックス スクイーズ おもちゃ プレゼント ギフト 人気 ストレス発散 即納 正規品 公式 902121",
-        "query": "メロジョイ Mellojoy ブラインドボックス 902121",
+        "rank": 9,
+        "title": "【年間ランキング入賞】【クーポン利用で1個20%、2個25%OFF】磁石ブロック マインクラフト風 レゴ互換 マイクラ風 マグネットキューブ マイクラ風 知育玩具 誕生日プレゼント クリスマス 入園ギフト 卒業プレゼント マグネット 磁石 ブロック おもちゃ クリスマスプレゼント",
+        "query": "磁石ブロック マインクラフト風 マグネットキューブ",
         "jan": "",
         "votes": {},
         "asin": "",
@@ -639,16 +564,14 @@
         "reason": "no_jan_in_hits"
       },
       {
-        "rank": 4,
-        "title": "【26日9:59まで最大20％PB】【楽天1位★あんしん保証】【グッド・トイ受賞】 KitWell 公式ストア キットウェル 正規品 マグビルド ベーシックセット マグネットブロック 70ピース 知育おもちゃ 知育玩具 誕生日 男の子 女の子 プレゼント 3歳 4歳 5歳 6歳 クリスマス",
-        "query": "KitWell ストア ベーシックセット",
+        "rank": 2,
+        "title": "メロジョイ Mellojoy ミニランド ミニ ブラインドボックス スクイーズ おもちゃ プレゼント ギフト 人気 ストレス発散 即納 正規品 公式 902121",
+        "query": "メロジョイ Mellojoy ブラインドボックス 902121",
         "jan": "",
-        "votes": {
-          "4589749480114": 1
-        },
+        "votes": {},
         "asin": "",
         "adopted": false,
-        "reason": "too_few_votes"
+        "reason": "no_jan_in_hits"
       },
       {
         "rank": 1,
@@ -664,6 +587,6 @@
     "mode": "enforce",
     "genre_gate_dropped_items": []
   },
-  "generated_at": "2026-11-27T02:02:15.331591+00:00",
-  "ranking_pool_size": 44
+  "generated_at": "2026-11-28T01:47:29.359543+00:00",
+  "ranking_pool_size": 46
 }
