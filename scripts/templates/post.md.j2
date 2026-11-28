@@ -74,8 +74,11 @@
 {%- endif -%}
 {%- endif -%}
 {%- endmacro -%}
-{#- 景表法 (ステマ規制): [PR] の断り書きは最初のアフィリエイトリンクより前に置く。 -#}
-<aside class="auto-gen-notice"><span class="pr-badge">[PR]</span><span class="auto-gen-notice-text">おもちゃロボが市場データから自動生成しています。</span></aside>
+{#- 景表法 (ステマ規制): [PR] の断り書きは最初のアフィリエイトリンクより前に置く。
+    2026-11-28 (K の判断): 冒頭は [PR] だけにする。Amazon アソシエイトの所定の文言は
+    フッター (partials/associate_disclosure.html) にあり、自動で作っている旨は末尾の
+    「この記事の根拠」の節で伝える。 -#}
+<aside class="auto-gen-notice"><span class="pr-badge">[PR]</span></aside>
 
 {# 販売終了 notice (2026-07-07): build_post._apply_amazon_discontinued が
     snapshot status=gone かつ 楽天/Yahoo にも直リンク無しのとき
@@ -620,7 +623,7 @@
 {% if sources %}
 ## 📚 この記事の根拠（参考にしたソース）
 
-{{ product.name }}に関する記述は、以下の{{ sources|length }}件のソースをもとにおもちゃロボが整理しました。
+{{ product.name }}に関する記述は、以下の{{ sources|length }}件のソースと価格・在庫などの市場データをもとに、おもちゃロボが自動で作成しています。
 
 {# 2026-11-28 (ページを短くする): 先頭 3 件は出したまま、残りを折りたたむ (根拠は信頼を支えるので丸ごとは隠さない)。 #}
 <ul class="sources-list">{% for s in sources[:3] %}<li>{% if s.url %}<a href="{{ affiliate_url(s.url) }}" target="_blank" rel="noopener noreferrer nofollow sponsored" data-cta-slot="source">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}{% if s.tier %} <span class="source-tier source-tier--{{ s.tier }}">信頼度：{{ s.tier }}</span>{% endif %}{% if s.author %}<br><small class="source-author">執筆主体：{{ s.author }}{% if s.published_at %} / 確認日：{{ s.published_at }}{% endif %}</small>{% endif %}{% if s.notes %}<br><small class="source-notes">{{ s.notes }}</small>{% endif %}</li>{% endfor %}</ul>
