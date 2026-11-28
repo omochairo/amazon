@@ -72,6 +72,17 @@ class VideoFoldTest(unittest.TestCase):
             self.assertIn(f"i.ytimg.com/vi/VID{i}aaaaaa/", fold)
         self.assertNotIn("<iframe", fold)
 
+    def test_non_youtube_and_escaped_title(self):
+        vids = [{"url": "https://youtu.be/FIRSTaaaaaa", "title": "1"},
+                {"url": "https://example.com/v", "title": "外部の動画"},
+                {"url": "https://youtu.be/THIRDaaaaaa", "title": "a <b> & c"}]
+        md = _md(youtube_embeds=vids)
+        fold = md.split('<details class="fold-more videos-more"')[1].split("</details>")[0]
+        # 開きタグの後に空行があり、2 本目の Markdown のリンクが HTML ブロックに飲まれない
+        self.assertRegex(fold, r"</summary>\n\n+- \[外部の動画\]\(https://example.com/v\)")
+        self.assertIn("<span>a &lt;b&gt; &amp; c</span>", fold)
+        self.assertNotIn("<iframe", fold)
+
     def test_single_video_not_folded(self):
         md = _md(youtube_embeds=[{"url": "https://youtu.be/ONLYaaaaaaa", "title": "t"}])
         self.assertNotIn("videos-more", md)

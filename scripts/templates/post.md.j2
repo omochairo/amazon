@@ -416,6 +416,7 @@
 {% for vid in youtube_embeds %}
 {%- if loop.index == 2 %}
 <details class="fold-more videos-more" data-wiki-skip><summary>ほかの関連動画を見る（{{ youtube_embeds|length - 1 }} 本）</summary>
+
 {% endif -%}
 {%- set _u = vid.url | default('') -%}
 {%- if 'youtube.com/watch?v=' in _u -%}
@@ -427,15 +428,19 @@
 {%- else -%}
 {%- set _vid_id = '' -%}
 {%- endif -%}
-{% if vid.embed_html %}
+{% if not loop.first %}
+{%- if _vid_id %}
+<a class="yt-thumb-link" href="https://www.youtube.com/watch?v={{ _vid_id }}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/{{ _vid_id }}/mqdefault.jpg" alt="" loading="lazy" decoding="async" width="320" height="180"><span>{{ (vid.title or '動画を YouTube で見る') | e }}</span></a>
+{%- elif vid.title and _u %}
+- [{{ vid.title }}]({{ _u }})
+{%- endif %}
+{% elif vid.embed_html %}
 
 {{ vid.embed_html }}
 
 {% if vid.title %}
 <p class="yt-caption">{{ vid.title }}</p>
 {% endif %}
-{% elif _vid_id and not loop.first %}
-<a class="yt-thumb-link" href="https://www.youtube.com/watch?v={{ _vid_id }}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/{{ _vid_id }}/mqdefault.jpg" alt="" loading="lazy" decoding="async" width="320" height="180"><span>{{ vid.title or '動画を YouTube で見る' }}</span></a>
 {% elif _vid_id %}
 
 <div class="yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/{{ _vid_id }}" title="{{ vid.title | e }}" loading="lazy" frameborder="0" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>

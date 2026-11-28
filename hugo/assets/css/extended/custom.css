@@ -8833,8 +8833,12 @@ a.sale-notice-main::after {
   content: "−";
 }
 .post-content details.faq-item > :not(summary) {
-  margin: 0;
-  padding: 0 14px 12px;
+  margin: 0 14px 12px;
+}
+/* 答えに箇条書きがあるとき、行頭の記号が枠に掛からないようにする */
+.post-content details.faq-item > ul,
+.post-content details.faq-item > ol {
+  padding-left: 1.4em;
 }
 [data-theme="dark"] .post-content details.faq-item {
   border-color: #374151;
