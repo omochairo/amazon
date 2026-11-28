@@ -278,5 +278,71 @@ class BuyBoxRenderTest(unittest.TestCase):
         self.assertIn("Amazonで検索 →", md)
 
 
+def _sale_slots(md: str) -> list[tuple[str, str]]:
+    """(モール, 置き場所) の並び。"""
+    return re.findall(
+        r'\{\{< sale_notice_inline shop="(\w+)" url="[^"]+" slot="([\w-]+)" variant="\w+" >\}\}', md)
+
+
+class SaleNoticeInlineRenderTest(unittest.TestCase):
+    """#9449: セール期間の 1 行は、そのモールのボタンの直上に出る (スマホで押せる位置)。
+
+    置くのは各モールの価格カードの中と、購入ボタンの箱の冒頭・まとめの後 (主ボタンのモール) だけ。
+    行き先はこの商品のそのモールのページ (ボタンと同じ URL)。そのモールで買えない商品には出さない。
+    どのモールのセールを出すかは shortcode が shop で絞る (楽天のカードに Amazon のセールは出ない)。
+    """
+
+    def test_placed_right_above_each_shop_button(self):
+        md = _render(_data(_prices(AMZ, dict(RKT, price=3000), dict(YHO, price=3500))))
+        # 中盤と FAQ の後の箱には出さない (出しすぎ)
+        self.assertEqual(_sale_slots(md), [
+            ("amazon", "buy-top"), ("amazon", "price-card"), ("rakuten", "price-card"),
+            ("yahoo", "price-card"), ("amazon", "buy-closing")])
+        # 行き先はこの商品のそのモールのページ (セール会場ではない)。すぐ後ろがそのモールのボタン
+        self.assertIn('slot="buy-top" variant="box" >}}<a class="buy-box-primary buy-box-primary--amazon', md)
+        self.assertIn('slot="buy-closing" variant="box" >}}<a class="buy-box-primary buy-box-primary--amazon', md)
+        for shop, url in (("amazon", AMZ["url"]), ("rakuten", RKT["url"]), ("yahoo", YHO["url"])):
+            with self.subTest(shop):
+                self.assertIn(f'shop="{shop}" url="{url}" slot="price-card" variant="card" >}}}}<a href="{url}"', md)
+        card = md.index('shop="amazon" url="' + AMZ["url"] + '" slot="price-card"')
+        self.assertLess(md.index("Amazon</div>"), card)
+        self.assertLess(card, md.index("price-card-cta--amazon"))
+        # カードの並びの後ろには出さない (スマホでは Yahoo のカードの下になる)
+        self.assertNotIn("{{< sale_notice_inline >}}", md)
+
+    def test_box_follows_primary_shop(self):
+        # 楽天が最安で主ボタン → 箱には楽天のセールを出す
+        md = _render(_data(_prices(AMZ, RKT, YHO)))
+        self.assertIn(("rakuten", "buy-top"), _sale_slots(md))
+        self.assertIn(("rakuten", "buy-closing"), _sale_slots(md))
+        self.assertNotIn(("amazon", "buy-top"), _sale_slots(md))
+        self.assertIn('slot="buy-top" variant="box" >}}<a class="buy-box-primary buy-box-primary--rakuten', md)
+
+    def test_not_shown_when_amazon_cannot_be_bought(self):
+        cases = {
+            "在庫切れ": dict(AMZ, availability="一時的に在庫切れ; 入荷時期は未定です。"),
+            "価格なし": dict(AMZ, price=0),
+            "取り扱い終了": {"price": 0, "url": "", "discontinued": True,
+                         "search_url": "https://www.amazon.co.jp/s?k=x&tag=chk01-22"},
+        }
+        for name, amz in cases.items():
+            with self.subTest(name):
+                md = _render(_data(_prices(amz, RKT_SEARCH, YHO_SEARCH)))
+                self.assertEqual(_sale_slots(md), [])
+
+    def test_not_shown_when_rakuten_or_yahoo_cannot_be_bought(self):
+        cases = {
+            "検索リンク": (RKT_SEARCH, YHO_SEARCH),
+            "同一商品と未確認": (dict(RKT, verified=False), dict(YHO, verified=False)),
+            "在庫切れ": (dict(RKT, availability="outofstock"), dict(YHO, availability="outofstock")),
+            "価格なし": (dict(RKT, price=0), dict(YHO, price=0)),
+        }
+        for name, (rkt, yho) in cases.items():
+            with self.subTest(name):
+                md = _render(_data(_prices(AMZ, rkt, yho)))
+                shops = {shop for shop, _ in _sale_slots(md)}
+                self.assertEqual(shops, {"amazon"})
+
+
 if __name__ == "__main__":
     unittest.main()
